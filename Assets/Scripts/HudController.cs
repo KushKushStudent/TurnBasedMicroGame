@@ -10,6 +10,7 @@ public class HudController : MonoBehaviour
     public Slider HP;
     public void setHud(Unit unit) 
     {
+        HP.minValue = 0;
         nameText.text = unit.unitName;
         levelText.text = "Lvl"+unit.unitLevel;
         HP.maxValue = unit.maxHP;

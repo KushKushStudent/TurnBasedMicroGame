@@ -11,16 +11,30 @@ public class CombatSystem : MonoBehaviour
     public GameObject enemy;
     Unit playerUnit;
     Unit enemyUnit;
-
+    public bool playerDefending;
+    public bool enemyDefending;
     public Text dbText;
+    public Text UltText;
+    public int ultPts;
+    public Slider UltSlider;
+    public int EnemyUltPts;
 
     public TurnPhases state;
    
     // Start is called before the first frame update
     void Start()
     {
+        UltSlider.maxValue = 10;
+        UltSlider.minValue = 0;
+        UltSlider.value = 0;
         state = TurnPhases.START;
        StartCoroutine( SetupBattle());
+        
+    }
+    private void Update()
+    {
+        UltText.text = "Ultimate: "+ultPts + "/10";
+        UltSlider.value = ultPts;
         
     }
 
@@ -47,28 +61,111 @@ public class CombatSystem : MonoBehaviour
         }
         StartCoroutine(PlayerAttack());
     }
+    public void onDefend() 
+    {
+        if (state != TurnPhases.PLAYERTURN)
+        {
+            return;
+        } 
+        StartCoroutine(PlayerDefend());
+
+
+    }
+    public void onUltimate()
+    {
+        if (state != TurnPhases.PLAYERTURN)
+        {
+            return;
+        }
+        if (ultPts == 10)
+        {
+            StartCoroutine(PlayerUlt());
+        }
+        else { return; }
+       
+
+
+    }
+    IEnumerator PlayerUlt() 
+    {
+        bool isDead = enemyUnit.TakeDamage(playerUnit.UltDamage);
+        dbText.text = "Ultimate unleashed! Enemy cannot defend!";
+        ultPts = 0;
+        enemyHud.setHP(enemyUnit.currentHp);
+        yield return new WaitForSeconds(1f);
+        if (isDead)
+        {
+            state = TurnPhases.WON;
+            EndBattle();
+
+        }
+        else
+        {
+            state = TurnPhases.ENEMYTURN;
+            StartCoroutine(EnemyTurn());
+        }
+
+
+    }
+    IEnumerator PlayerDefend() 
+    {
+        playerDefending = true;
+        dbText.text = "Entered defense stance.Next turn only damage is halved.";
+
+        yield return new WaitForSeconds(2f);
+        state = TurnPhases.ENEMYTURN;
+        StartCoroutine(EnemyTurn());
+    }
+
     IEnumerator PlayerAttack()
     {
+        if (playerDefending==true) { playerDefending = false; }
         if (Random.Range(1, 6) >= 3)
         {
-            bool isDead = enemyUnit.TakeDamage(playerUnit.damage);
-        enemyHud.setHP(enemyUnit.currentHp);
-            dbText.text = "Attack is succesful!";
-
-
-
-            enemyUnit.TakeDamage(playerUnit.damage);
-            yield return new WaitForSeconds(2f);
-            if (isDead)
+            if (enemyDefending == true)
             {
-                state = TurnPhases.WON;
-                EndBattle();
-            }
-            else 
+                bool isDead = enemyUnit.TakeDefendedDamage(playerUnit.damage);
+                dbText.text = "Enemy defends. Attack partially successful.";
+                ultPts++;
+                Mathf.Clamp(ultPts, 0, 10);
+                enemyHud.setHP(enemyUnit.currentHp);
+                yield return new WaitForSeconds(1f);
+                if (isDead)
+                {
+                    state = TurnPhases.WON;
+                    EndBattle();
+
+                }
+                else
+                {
+                    state = TurnPhases.ENEMYTURN;
+                    StartCoroutine(EnemyTurn());
+                }
+            } 
+            else
             {
-                state = TurnPhases.ENEMYTURN;
-                StartCoroutine(EnemyTurn());
+                bool isDead = enemyUnit.TakeDamage(playerUnit.damage);
+                enemyHud.setHP(enemyUnit.currentHp);
+                ultPts += 2;
+                dbText.text = "Attack is succesful!";
+                Mathf.Clamp(ultPts, 0, 10);
+
+
+                enemyUnit.TakeDamage(playerUnit.damage);
+                yield return new WaitForSeconds(2f);
+                if (isDead)
+                {
+                    state = TurnPhases.WON;
+                    EndBattle();
+                }
+                else
+                {
+                    state = TurnPhases.ENEMYTURN;
+                    StartCoroutine(EnemyTurn());
+                }
+
             }
+          
         }
         else
         {
@@ -82,28 +179,62 @@ public class CombatSystem : MonoBehaviour
        
     }
     IEnumerator EnemyTurn()
-    { int RandomAct = Random.Range(1, 6);
+    { if (enemyDefending == true) 
+        {
+            enemyDefending = false;
+        
+        }
+        int RandomAct = Random.Range(1, 6);
         if (RandomAct <= 3)
         {
             dbText.text = enemyUnit.name + " attacks!";
             yield return new WaitForSeconds(2f);
             if (Random.Range(1, 6) > 2)
             {
-                bool isDead = playerUnit.TakeDamage(enemyUnit.damage);
 
-                dbText.text = "Attack successful!";
-                playerHud.setHP(playerUnit.currentHp);
-                yield return new WaitForSeconds(1f);
-                if (isDead)
+                if (playerDefending == true)
                 {
-                    state = TurnPhases.LOST; EndBattle();
+                    bool isDead = playerUnit.TakeDefendedDamage(enemyUnit.damage);
+                    playerDefending = false;
+                    EnemyUltPts++;
+                    Mathf.Clamp(EnemyUltPts, 0, 10);
+                    dbText.text = "Player defends. Attack partially successful.";
+                    playerHud.setHP(playerUnit.currentHp);
+                    yield return new WaitForSeconds(1f);
+                    if (isDead)
+                    {
+                        state = TurnPhases.LOST;
+                        EndBattle();
 
+                    }
+                    else
+                    {
+                        state = TurnPhases.PLAYERTURN;
+                        PlayerTurn();
+                    }
                 }
-                else 
+                else
                 {
-                    state = TurnPhases.PLAYERTURN;
-                    PlayerTurn();
+                    bool isDead = playerUnit.TakeDamage(enemyUnit.damage);
+                    dbText.text = "Attack successful!";
+                    EnemyUltPts += 2;
+                    Mathf.Clamp(EnemyUltPts, 0, 10);
+
+                    playerHud.setHP(playerUnit.currentHp);
+                    yield return new WaitForSeconds(1f);
+                    if (isDead)
+                    {
+                        state = TurnPhases.LOST;
+                        EndBattle();
+
+                    }
+                    else
+                    {
+                        state = TurnPhases.PLAYERTURN;
+                        PlayerTurn();
+                    }
                 }
+
             }
             else
             {
@@ -112,14 +243,47 @@ public class CombatSystem : MonoBehaviour
                 yield return new WaitForSeconds(2f);
                 state = TurnPhases.PLAYERTURN;
                 PlayerTurn();
-               
-                
+
+
             }
 
         }
-        else { //add new attacks
-              
-               }
+        
+        else if ((RandomAct == 6 && EnemyUltPts == 10)|| (RandomAct == 5 && EnemyUltPts == 10))
+        {
+            EnemyUltPts = 0;
+            bool isDead = playerUnit.TakeDamage(enemyUnit.UltDamage);
+            dbText.text = "Enemy unleashes Ultimate! You cannot defend.";
+            EnemyUltPts += 2;
+            Mathf.Clamp(EnemyUltPts, 0, 10);
+
+            playerHud.setHP(playerUnit.currentHp);
+            yield return new WaitForSeconds(2f);
+            if (isDead)
+            {
+                state = TurnPhases.LOST;
+                EndBattle();
+
+            }
+            else
+            {
+                dbText.text = "Enemy smoked some weed and is tripping crazy. No action made.";
+                state = TurnPhases.PLAYERTURN;
+                PlayerTurn();
+            }
+        }
+        else if (RandomAct == 4 || RandomAct == 5)
+        {
+            enemyDefending = true;
+            dbText.text = "Entered defense stance.Next turn only damage dealt is halved.";
+
+            yield return new WaitForSeconds(2f);
+            state = TurnPhases.PLAYERTURN;
+            PlayerTurn();
+
+
+        }
+        else { }
         
 
     }

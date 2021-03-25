@@ -8,6 +8,7 @@ public class Unit : MonoBehaviour
     public int unitLevel;
 
         public int damage;
+    public int UltDamage;
     public int maxHP;
     public int currentHp;
     // Start is called before the first frame update
@@ -31,4 +32,17 @@ public class Unit : MonoBehaviour
             return false;
         }
     }
+    public bool TakeDefendedDamage(int dmg)
+    {
+        currentHp -= dmg/2;
+        if (currentHp <= 0)
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+    
 }
