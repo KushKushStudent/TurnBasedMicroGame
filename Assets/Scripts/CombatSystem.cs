@@ -18,29 +18,31 @@ public class CombatSystem : MonoBehaviour
     public int ultPts;
     public Slider UltSlider;
     public int EnemyUltPts;
+    public Canvas StoreCanvas;
 
     public TurnPhases state;
-   
+
     // Start is called before the first frame update
     void Start()
     {
+        StoreCanvas.enabled = false;
         UltSlider.maxValue = 10;
         UltSlider.minValue = 0;
         UltSlider.value = 0;
         state = TurnPhases.START;
-       StartCoroutine( SetupBattle());
-        
+        StartCoroutine(SetupBattle());
+
     }
     private void Update()
     {
-        UltText.text = "Ultimate: "+ultPts + "/10";
-        UltSlider.value = ultPts;
-        
+        UltText.text = "Ult Pts: " + ultPts + "/10";
+        UltSlider.value = Mathf.Clamp(ultPts, 0, 10) ;
+
     }
 
-    IEnumerator SetupBattle() 
+    IEnumerator SetupBattle()
     {
-      playerUnit=  player.GetComponent<Unit>();
+        playerUnit = player.GetComponent<Unit>();
         enemyUnit = enemy.GetComponent<Unit>();
         dbText.text = " A wounded " + playerUnit.name + " approaches!";
         playerHud.setHud(playerUnit);
@@ -49,11 +51,60 @@ public class CombatSystem : MonoBehaviour
         state = TurnPhases.PLAYERTURN;
         PlayerTurn();
     }
-    void PlayerTurn() 
+    void PlayerTurn()
     {
         dbText.text = "Choose an Action: ";
     }
-   public void onAttackBtn() 
+    public void OnStoreBtn()
+    {
+        if (state != TurnPhases.PLAYERTURN)
+        {
+            return;
+        }
+        else
+        {
+            StoreCanvas.enabled = true;
+
+
+        }
+
+
+    }
+    public void onHealBtn()
+    {
+        if (ultPts>=4) 
+        {
+            StartCoroutine(HealthPotion());
+
+        }else 
+        { 
+            return; 
+        }
+        
+
+    }
+    IEnumerator HealthPotion() 
+    {
+        ultPts -= 4;
+        StoreCanvas.enabled = false;
+        dbText.text = "Consuming Healing Potion... +5HP!";
+        yield return new WaitForSeconds(2f);
+        playerUnit.currentHp += 5;
+        playerHud.setHud(playerUnit);
+        state = TurnPhases.ENEMYTURN;
+        StartCoroutine(EnemyTurn());
+
+
+    }
+    public void ExitBtn() 
+    {
+        Application.Quit();
+    }
+    public void onBackBtn() 
+    {
+        StoreCanvas.enabled = false;
+    }
+    public void onAttackBtn() 
     {
         if (state!=TurnPhases.PLAYERTURN) 
         {
@@ -126,6 +177,7 @@ public class CombatSystem : MonoBehaviour
             {
                 bool isDead = enemyUnit.TakeDefendedDamage(playerUnit.damage);
                 dbText.text = "Enemy defends. Attack partially successful.";
+                EnemyUltPts++;
                 ultPts++;
                 Mathf.Clamp(ultPts, 0, 10);
                 enemyHud.setHP(enemyUnit.currentHp);
@@ -197,6 +249,7 @@ public class CombatSystem : MonoBehaviour
                     bool isDead = playerUnit.TakeDefendedDamage(enemyUnit.damage);
                     playerDefending = false;
                     EnemyUltPts++;
+                    ultPts++;
                     Mathf.Clamp(EnemyUltPts, 0, 10);
                     dbText.text = "Player defends. Attack partially successful.";
                     playerHud.setHP(playerUnit.currentHp);
