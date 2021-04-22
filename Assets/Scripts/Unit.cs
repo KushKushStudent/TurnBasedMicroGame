@@ -6,8 +6,9 @@ public class Unit : MonoBehaviour
 {
     public string unitName;
     public int unitLevel;
+    public bool Defending;
 
-        public int damage;
+        public int MaxRoundDamage;
     public int UltDamage;
     public int maxHP;
     public int currentHp;

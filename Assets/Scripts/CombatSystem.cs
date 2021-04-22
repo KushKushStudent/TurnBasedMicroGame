@@ -6,6 +6,7 @@ public enum TurnPhases {START,PLAYERTURN,ENEMYTURN,WON,LOST }
 public class CombatSystem : MonoBehaviour
 {
     public HudController playerHud;
+    public StoreController SC;
     public HudController enemyHud;
     public GameObject player;
     public GameObject enemy;
@@ -19,12 +20,21 @@ public class CombatSystem : MonoBehaviour
     public Slider UltSlider;
     public int EnemyUltPts;
     public Canvas StoreCanvas;
-
+    public Text storeText;
+    public bool PlayerRateboost;
+    public float PlayerAttackPerc;
+    public int RateBoostUses=2;
+    public float standardRate=50;
     public TurnPhases state;
+    public int DamageDealt;
+    public bool DamageBoostActive;
+    
 
     // Start is called before the first frame update
     void Start()
     {
+        SC.RefreshStore();
+        DamageBoostActive = false;
         StoreCanvas.enabled = false;
         UltSlider.maxValue = 10;
         UltSlider.minValue = 0;
@@ -72,12 +82,13 @@ public class CombatSystem : MonoBehaviour
     }
     public void onHealBtn()
     {
-        if (ultPts>=4) 
+        if (ultPts>=SC.HealCost) 
         {
             StartCoroutine(HealthPotion());
 
         }else 
-        { 
+        {
+            storeText.text = "Not enough UP!";
             return; 
         }
         
@@ -85,17 +96,60 @@ public class CombatSystem : MonoBehaviour
     }
     IEnumerator HealthPotion() 
     {
-        ultPts -= 4;
-        StoreCanvas.enabled = false;
-        dbText.text = "Consuming Healing Potion... +5HP!";
+        ultPts -= SC.HealCost;
+        SC.increaseHealCost();
+        SC.RefreshStore();
+        
+        storeText.text = "Consuming Health Potion! +5HP";
+       
+      
+     
         yield return new WaitForSeconds(2f);
         playerUnit.currentHp += 5;
         playerHud.setHud(playerUnit);
-        state = TurnPhases.ENEMYTURN;
-        StartCoroutine(EnemyTurn());
+
+       
 
 
     }
+    public void onRateBoostClick()
+    {
+        if (ultPts>=SC.HRCost)
+        {
+            ultPts -= SC.HRCost;
+            SC.increaseHRCost();  SC.RefreshStore();
+            RateBoostUses = 2;
+            PlayerAttackPerc += 20;
+            storeText.text = "Purchased Hit Rate Boost. The next 2 attacks have a +20% hit chance. ";
+
+        }
+        else
+        {
+            storeText.text = "Not enough UP!";
+            return;
+        }
+    
+    }  
+    public void onDamageBoostClick()
+    {
+        if (ultPts>=SC.DBCost)
+        {
+            ultPts -= SC.DBCost;
+            SC.increaseDBCost(); SC.RefreshStore();
+            DamageBoostActive = true;
+            PlayerAttackPerc += 20;
+            storeText.text = "Damage boost now active! 1.5x damage! ";
+
+        }
+        else
+        {
+            storeText.text = "Not enough UP!";
+            return;
+        }
+    
+    }
+   
+
     public void ExitBtn() 
     {
         Application.Quit();
@@ -110,7 +164,7 @@ public class CombatSystem : MonoBehaviour
         {
             return;        
         }
-        StartCoroutine(PlayerAttack());
+        StartCoroutine(PlayerAttack2());
     }
     public void onDefend() 
     {
@@ -160,7 +214,7 @@ public class CombatSystem : MonoBehaviour
     }
     IEnumerator PlayerDefend() 
     {
-        playerDefending = true;
+        playerUnit.Defending= true;
         dbText.text = "Entered defense stance.Next turn only damage is halved.";
 
         yield return new WaitForSeconds(2f);
@@ -170,12 +224,12 @@ public class CombatSystem : MonoBehaviour
 
     IEnumerator PlayerAttack()
     {
-        if (playerDefending==true) { playerDefending = false; }
+        if (playerUnit.Defending==true) { playerUnit.Defending = false; }
         if (Random.Range(1, 6) >= 3)
         {
-            if (enemyDefending == true)
+            if (enemyUnit.Defending== true)
             {
-                bool isDead = enemyUnit.TakeDefendedDamage(playerUnit.damage);
+                bool isDead = enemyUnit.TakeDefendedDamage(playerUnit.MaxRoundDamage);
                 dbText.text = "Enemy defends. Attack partially successful.";
                 EnemyUltPts++;
                 ultPts++;
@@ -196,14 +250,14 @@ public class CombatSystem : MonoBehaviour
             } 
             else
             {
-                bool isDead = enemyUnit.TakeDamage(playerUnit.damage);
+                bool isDead = enemyUnit.TakeDamage(playerUnit.MaxRoundDamage);
                 enemyHud.setHP(enemyUnit.currentHp);
-                ultPts += 2;
+                ultPts += 3;
                 dbText.text = "Attack is succesful!";
                 Mathf.Clamp(ultPts, 0, 10);
 
 
-                enemyUnit.TakeDamage(playerUnit.damage);
+                enemyUnit.TakeDamage(playerUnit.MaxRoundDamage);
                 yield return new WaitForSeconds(2f);
                 if (isDead)
                 {
@@ -230,10 +284,83 @@ public class CombatSystem : MonoBehaviour
        
        
     }
-    IEnumerator EnemyTurn()
-    { if (enemyDefending == true) 
+    IEnumerator PlayerAttack2() 
+    {
+        bool isDead = false; 
+        yield return new WaitForSeconds(1);
+        if (RateBoostUses == 0)
         {
-            enemyDefending = false;
+            PlayerAttackPerc = 0; 
+        }
+       
+            int rollVal= Random.Range(0, 100);
+            if ((rollVal + PlayerAttackPerc) >= 40) //attack hits
+            {
+                     DamageDealt = playerUnit.MaxRoundDamage;
+                         if (DamageBoostActive == true)
+                         {
+                                  DamageDealt = playerUnit.MaxRoundDamage * (int)1.5f;
+                         }
+
+                //  DamageDealt = (int)3*((playerUnit.unitLevel *2* (Mathf.Clamp(playerUnit.currentHp, playerUnit.MaxRoundDamage,100) / playerUnit.MaxRoundDamage))/(playerUnit.MaxRoundDamage-DamageBoostAmmount)); Damage Formula drafting, requires more time to test. Sticking with simple calc. issues with floats too broad to change now.
+            if (enemyUnit.Defending == true)
+            {
+                DamageDealt = DamageDealt / 2;
+                isDead = enemyUnit.TakeDamage((int)(DamageDealt));
+
+                dbText.text = "Enemy defends. Attack partially successful.";
+                EnemyUltPts+=2;
+                ultPts+=3;
+                Mathf.Clamp(ultPts, 0, 10);
+                enemyHud.setHP(enemyUnit.currentHp);
+                yield return new WaitForSeconds(3f);
+
+            }
+            else
+            {
+               
+                
+                isDead = enemyUnit.TakeDamage((int)(DamageDealt));
+                enemyHud.setHP(enemyUnit.currentHp);
+                ultPts += 3;
+                dbText.text = "Attack is succesful!";
+                Mathf.Clamp(ultPts, 0, 10);
+
+
+
+                yield return new WaitForSeconds(3f);
+            }
+          
+             if (isDead)
+             {
+                state = TurnPhases.WON;
+                EndBattle();
+
+             }
+            else
+            {
+                state = TurnPhases.ENEMYTURN;
+                StartCoroutine(EnemyTurn());
+            }
+
+        }
+
+
+        //attack fails
+        else
+        {
+            dbText.text = "Attack misses";
+            yield return new WaitForSeconds(2f);
+            state = TurnPhases.ENEMYTURN;
+            StartCoroutine(EnemyTurn());
+
+        }
+        RateBoostUses--;
+        Mathf.Clamp(RateBoostUses, 0, 2);
+    }
+    IEnumerator EnemyTurn()
+    { if (enemyUnit.Defending == true)  
+        {enemyUnit.Defending = false;
         
         }
         int RandomAct = Random.Range(1, 6);
@@ -244,12 +371,12 @@ public class CombatSystem : MonoBehaviour
             if (Random.Range(1, 6) > 2)
             {
 
-                if (playerDefending == true)
+                if (playerUnit.Defending== true)
                 {
-                    bool isDead = playerUnit.TakeDefendedDamage(enemyUnit.damage);
-                    playerDefending = false;
-                    EnemyUltPts++;
-                    ultPts++;
+                    bool isDead = playerUnit.TakeDefendedDamage(enemyUnit.MaxRoundDamage);
+                    playerUnit.Defending = false;
+                    EnemyUltPts+=2;
+                    ultPts+=2;
                     Mathf.Clamp(EnemyUltPts, 0, 10);
                     dbText.text = "Player defends. Attack partially successful.";
                     playerHud.setHP(playerUnit.currentHp);
@@ -268,9 +395,9 @@ public class CombatSystem : MonoBehaviour
                 }
                 else
                 {
-                    bool isDead = playerUnit.TakeDamage(enemyUnit.damage);
+                    bool isDead = playerUnit.TakeDamage(enemyUnit.MaxRoundDamage);
                     dbText.text = "Attack successful!";
-                    EnemyUltPts += 2;
+                    EnemyUltPts += 3;
                     Mathf.Clamp(EnemyUltPts, 0, 10);
 
                     playerHud.setHP(playerUnit.currentHp);
@@ -307,7 +434,7 @@ public class CombatSystem : MonoBehaviour
             EnemyUltPts = 0;
             bool isDead = playerUnit.TakeDamage(enemyUnit.UltDamage);
             dbText.text = "Enemy unleashes Ultimate! You cannot defend.";
-            EnemyUltPts += 2;
+            EnemyUltPts += 3;
             Mathf.Clamp(EnemyUltPts, 0, 10);
 
             playerHud.setHP(playerUnit.currentHp);
@@ -327,7 +454,7 @@ public class CombatSystem : MonoBehaviour
         }
         else if (RandomAct == 4 || RandomAct == 5)
         {
-            enemyDefending = true;
+            enemyUnit.Defending =true;
             dbText.text = "Entered defense stance.Next turn only damage dealt is halved.";
 
             yield return new WaitForSeconds(2f);
